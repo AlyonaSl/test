@@ -11,7 +11,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 OUT=output/scad
 mkdir -p "$OUT"
-PARTS=(stand clamp axle lock)
+# All printable parts (incl. split-axle halves and the small-parts plate).
+PARTS=(stand clamp axle axle_a axle_b lock accessories)
 
 echo ">> STL + 3MF (print masters)"
 for p in "${PARTS[@]}"; do

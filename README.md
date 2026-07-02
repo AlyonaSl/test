@@ -60,6 +60,13 @@ a flat 2.2 mm front. Previews render in **white matte** (`render_scad.py`,
 
 Files: `output/scad/<part>.stl` (print), `.3mf` (print), `.step` (reference).
 
+### Printing
+
+See **[PRINTING.md](PRINTING.md)** for the ready-to-slice file list, quantities,
+orientation, supports and settings. In short: print `stand.3mf`,
+`accessories.3mf` (clamp + 2 caps), and the axle as `axle.3mf` (large beds) or
+`axle_a.3mf` + `axle_b.3mf` (split halves for standard beds).
+
 ### Build / export (OpenSCAD)
 Requires system `openscad` + `xvfb` (headless). Preview one part or export all:
 ```bash

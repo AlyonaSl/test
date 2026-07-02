@@ -42,6 +42,13 @@ rib_w           = 2.6;    // rib wall thickness
 oval_len        = 112;    // large leaf-shaped lightening cutout
 oval_w          = 24;
 
+// ---- split axle (for smaller print beds) ------------------------
+// The 350 mm axle is longer than most beds; print it as two halves that
+// join with a centre pin/socket inside the hub. Each half is ~180 mm.
+coupler_d       = 9;      // centre coupling pin diameter
+coupler_len     = 14;     // pin length / socket depth
+coupler_clr     = 0.35;   // pin-in-socket clearance
+
 // ---- axle + CENTRAL hub  (mount is at the CENTRE of the axle) -----
 // The stand carries the axle at its mid-point; rolls sit on BOTH sides.
 // This turns one 290 mm cantilever into two ~145 mm ones (deflection ~1/16).
@@ -367,6 +374,35 @@ module Axle() {
     }
 }
 
+// One split-axle half (axis = Z): outer end (z=0) takes a pebble cap; the
+// centre end (z=L) has either a coupling pin (pin=true) or socket (pin=false).
+axle_half_len = hub_w/2 + each_side + axle_end;   // centre -> outer end
+
+module _axle_half(pin=true) {
+    L = axle_half_len;
+    lug_z = bay_entry - lug_w/2 + 2;              // outer-end lugs (for the cap)
+    difference() {
+        union() {
+            cylinder(h=L, d=axle_dia);
+            _axle_lugs(lug_z);
+            if (pin) translate([0, 0, L - eps]) cylinder(h=coupler_len, d=coupler_d);
+        }
+        // centre socket (the non-pin half)
+        if (!pin)
+            translate([0, 0, L - coupler_len - coupler_clr])
+                cylinder(h=coupler_len + coupler_clr + eps, d=coupler_d + coupler_clr);
+        // outer-end lead-in chamfer
+        translate([0, 0, -eps]) cylinder(h=3, d1=axle_dia + 2, d2=axle_dia - 3);
+        // coupling lead-in chamfers
+        if (pin)
+            translate([0, 0, L + coupler_len + eps]) mirror([0,0,1])
+                cylinder(h=1.6, d1=coupler_d + 1.4, d2=coupler_d - 0.8);
+    }
+}
+
+module AxleA() { _axle_half(true);  }   // half with the coupling pin
+module AxleB() { _axle_half(false); }   // half with the coupling socket
+
 // =============================================================================
 //  LOCK  =  bayonet end fixator / outer roll stop  (print x2)
 // =============================================================================
@@ -430,13 +466,24 @@ module Assembly() {
     color([0.75, 0.77, 0.82]) translate([-axle_total/2, hub_y, 0]) rotate([0,-90,0]) Lock();
 }
 
+// Small-parts print plate: clamp screw + two pebble caps, laid out flat on one
+// small bed and ready to slice (screw head down; caps dome-up).
+module Accessories() {
+    translate([-30, 0, screw_len + screw_head_h]) rotate([180, 0, 0]) Clamp();
+    translate([ 16, -24, 0]) Lock();
+    translate([ 16,  24, 0]) Lock();
+}
+
 // -----------------------------------------------------------------------------
 //  DISPATCH
 // -----------------------------------------------------------------------------
 Parameters();
 
-if      (PART == "stand")    Stand();
-else if (PART == "clamp")    Clamp();
-else if (PART == "axle")     Axle();
-else if (PART == "lock")     Lock();
-else                         Assembly();
+if      (PART == "stand")        Stand();
+else if (PART == "clamp")        Clamp();
+else if (PART == "axle")         Axle();        // full one-piece axle (~350 mm)
+else if (PART == "axle_a")       AxleA();        // split half (pin)  — small beds
+else if (PART == "axle_b")       AxleB();        // split half (socket)
+else if (PART == "lock")         Lock();
+else if (PART == "accessories")  Accessories();  // clamp + 2 caps on one plate
+else                             Assembly();
