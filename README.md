@@ -51,7 +51,12 @@ a flat 2.2 mm front. Previews render in **white matte** (`render_scad.py`,
 | Stand (blade + hidden rib + clamp head + central hub + flanges) | 1 | `Stand()` |
 | Clamp thumb-screw (recessed, self-tapping) | 1 | `Clamp()` |
 | Axle Ø16 (plain rod, bayonet lug at each end) | 1 | `Axle()` |
-| Bayonet end fixator / roll stop | 2 | `Lock()` |
+| Small domed "pebble" end fixator (Ø26) | 2 | `Lock()` |
+
+> The end fixators are intentionally small for a clean look. They cap/lock the
+> axle but do not by themselves stop large (Ø50–80) cores from sliding off; the
+> central Ø84 flanges are the primary spool stops. To add a positive end
+> roll-stop, set `end_stop_dia` (e.g. `84`) in the parameters.
 
 Files: `output/scad/<part>.stl` (print), `.3mf` (print), `.step` (reference).
 

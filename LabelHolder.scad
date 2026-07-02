@@ -71,18 +71,19 @@ screw_head_dia  = 17;     // knurled head (sits recessed in the jaw)
 screw_head_h    = 7;
 screw_z         = -clamp_reach*0.62;   // screw position under the desk
 
-// ---- bayonet -----------------------------------------------------
-lug_w           = 5;      // lug axial width
-lug_h           = 2.6;    // lug radial height
+// ---- bayonet (compact, so the end caps can be small) -------------
+lug_w           = 4;      // lug axial width
+lug_h           = 2.2;    // lug radial height
 lug_span        = 40;     // lug angular width (deg)
-bay_entry       = 10;     // axial entry-slot depth
+bay_entry       = 7;      // axial entry-slot depth
 bay_lock        = 95;     // lock groove sweep (deg)
 
-// ---- lock / fixator (smooth domed cap) --------------------------
-lock_flange_dia = 84;     // outer roll stop (> core_id_max)
-lock_flange_t   = 4;
-lock_grip_dia   = 30;
-lock_grip_h     = 18;
+// ---- lock / fixator (small, elegant domed end knob) -------------
+lock_knob_dia   = 26;     // small end-knob diameter (just caps the axle)
+lock_knob_h     = 20;     // knob height (houses the compact bayonet socket)
+end_stop_dia    = 0;      // 0 = no roll-stop flange (most elegant look).
+                          // Set > core (e.g. 84) to positively retain rolls.
+end_stop_t      = 3;
 
 // ---- quality -----------------------------------------------------
 FN              = 72;     // circle resolution (lower for a light STEP mesh)
@@ -369,22 +370,33 @@ module Axle() {
 // =============================================================================
 //  LOCK  =  bayonet end fixator / outer roll stop  (print x2)
 // =============================================================================
+// Smooth domed knob: Ø d, height h, flat base at z = 0 (a soft "pebble" cap).
+module _knob(d, h) {
+    cyl_h = max(h - d/2, 0.1);
+    union() {
+        cylinder(d=d, h=cyl_h);
+        translate([0, 0, cyl_h]) _dome(d, d/2);   // hemispherical cap on top
+    }
+}
+
 module Lock() {
-    total  = lock_flange_t + lock_grip_h;
-    socket = bay_entry + lug_w + 1;          // shallow: keeps a solid dome wall
+    socket = bay_entry + lug_w + 1;          // compact bayonet socket
+    has_stop = end_stop_dia > lock_knob_dia;
+    knob_z   = has_stop ? end_stop_t - 1.2 : 0;
     difference() {
         union() {
-            // lens-rim roll-stop flange (inward face, z = 0..flange_t)
-            translate([0, 0, lock_flange_t/2])
-                rdisc(lock_flange_dia, lock_flange_t, min(flange_t/2 - 0.2, 1.6));
-            // smooth domed grip (outward); overlap the flange so they fuse
-            translate([0, 0, lock_flange_t - 1.5]) _dome(lock_grip_dia, lock_grip_h);
+            // optional thin roll-stop flange (inward face) — off by default
+            if (has_stop)
+                translate([0, 0, end_stop_t/2])
+                    rdisc(end_stop_dia, end_stop_t, min(end_stop_t/2 - 0.2, 1.4));
+            // small smooth domed knob (the elegant end cap)
+            translate([0, 0, knob_z]) _knob(lock_knob_dia, lock_knob_h);
         }
         // bayonet socket, opening on the inward face (z = 0)
         translate([0, 0, -eps]) cylinder(h=socket + eps, d=bore_d);
         translate([0, 0, socket]) mirror([0, 0, 1]) _bayonet_slots(socket);
         // chamfer the mouth for easy engagement
-        translate([0, 0, -eps]) cylinder(h=1.4, d1=bore_d + 2.4, d2=bore_d);
+        translate([0, 0, -eps]) cylinder(h=1.2, d1=bore_d + 2.0, d2=bore_d);
     }
 }
 
