@@ -39,8 +39,8 @@ rib_depth       = 14;     // how far the rib stands off the back
 rib_w           = 2.6;    // rib wall thickness
 
 // ---- long oval lightening cutout --------------------------------
-oval_len        = 120;
-oval_w          = 10;
+oval_len        = 150;    // long, slim slot (elegant)
+oval_w          = 8;
 
 // ---- axle + CENTRAL hub  (mount is at the CENTRE of the axle) -----
 // The stand carries the axle at its mid-point; rolls sit on BOTH sides.
@@ -53,13 +53,13 @@ hub_od          = 30;     // central hub outer diameter
 hub_w           = 26;     // central hub length along the axle (X)
 hub_y           = 46;     // axle height above the stand bottom
 flange_dia      = core_id_max + 4;  // central roll-stop flanges (> max core)
-flange_t        = 3;      // flange thickness
+flange_t        = 4;      // flange thickness (lens rim -> looks thin)
 
 // ---- edge clamp --------------------------------------------------
 desk_min        = 10;
 desk_max        = 40;
 clamp_reach     = 40;     // how far the clamp reaches over/under the desk
-clamp_arm_t     = 7;      // hook / jaw thickness
+clamp_arm_t     = 6;      // hook / jaw thickness (slim)
 clamp_open      = 44;     // clear opening (> desk_max) ; screw takes up slack
 
 // ---- clamp screw (recessed, tool-free) --------------------------
@@ -78,11 +78,11 @@ lug_span        = 40;     // lug angular width (deg)
 bay_entry       = 10;     // axial entry-slot depth
 bay_lock        = 95;     // lock groove sweep (deg)
 
-// ---- lock / fixator ---------------------------------------------
+// ---- lock / fixator (smooth domed cap) --------------------------
 lock_flange_dia = 84;     // outer roll stop (> core_id_max)
-lock_flange_t   = 3;
+lock_flange_t   = 4;
 lock_grip_dia   = 30;
-lock_grip_h     = 15;
+lock_grip_h     = 18;
 
 // ---- quality -----------------------------------------------------
 FN              = 72;     // circle resolution (lower for a light STEP mesh)
@@ -125,8 +125,26 @@ module rbox(sz, r=3) {
     minkowski() {
         cube([max(sz[0]-2*r,0.01), max(sz[1]-2*r,0.01), max(sz[2]-2*r,0.01)],
              center=true);
-        sphere(r=r, $fn=max(12, floor(FN/3)));
+        sphere(r=r, $fn=max(8, floor(FN/3)));
     }
+}
+
+// Disc with a fully rounded rim (elegant "lens" flange), centred on Z.
+module rdisc(d, h, r) {
+    minkowski() {
+        cylinder(d=max(d-2*r, 0.1), h=max(h-2*r, 0.1), center=true);
+        sphere(r=r, $fn=max(10, floor(FN/2)));
+    }
+}
+
+// Smooth spherical-cap dome of base diameter d and height h, base at z=0.
+module _dome(d, h) {
+    r = d/2;
+    scale([1, 1, h/r])
+        intersection() {
+            sphere(r=r, $fn=FN);
+            translate([0, 0, 0]) cylinder(r=r, h=r);
+        }
 }
 
 // 2D blade silhouette: two hulled lobes with a gentle waist (organic bone).
@@ -202,18 +220,28 @@ module _clamp_head() {
     top_arm_y = stand_h - clamp_arm_t/2;
     jaw_arm_y = jaw_top - clamp_arm_t/2;
     union() {
-        // reinforced spine (locally thick to full rib depth, big radii)
-        translate([0, (jaw_top + stand_h)/2 - clamp_arm_t/2, -rib_depth/2])
-            rbox([w, stand_h - jaw_top, rib_depth], 4);
-        // top hook arm, reaching over the desk (-Z)
-        translate([0, top_arm_y, -clamp_reach/2 + eps])
-            rbox([w, clamp_arm_t, clamp_reach], 3);
-        // small downward lip at the hook tip (positive grip on the top edge)
-        translate([0, stand_h - clamp_arm_t, -clamp_reach + clamp_arm_t/2])
-            rbox([w, clamp_arm_t*1.6, clamp_arm_t], 3);
-        // bottom jaw arm, reaching under the desk (-Z)
-        translate([0, jaw_arm_y, -clamp_reach/2 + eps])
-            rbox([w, clamp_arm_t, clamp_reach], 3);
+        // reinforced spine, blended into the blade with a large-radius flare
+        hull() {
+            translate([0, (jaw_top + stand_h)/2 - clamp_arm_t/2, -rib_depth/2])
+                rbox([w, stand_h - jaw_top, rib_depth], 5);
+            translate([0, jaw_top - 24, -rib_depth/2])
+                rbox([waist_w + 6, 6, rib_depth], 5);
+        }
+        // top hook arm (over the desk), softly rounded
+        hull() {
+            translate([0, top_arm_y, -eps]) rbox([w, clamp_arm_t, 2], 3);
+            translate([0, top_arm_y, -clamp_reach + clamp_arm_t])
+                rbox([w, clamp_arm_t, 2], 3);
+        }
+        // gentle downturned lip at the hook tip (positive grip), rounded
+        translate([0, stand_h - clamp_arm_t*0.9, -clamp_reach + clamp_arm_t/2])
+            rbox([w, clamp_arm_t*1.8, clamp_arm_t], 3);
+        // bottom jaw arm (under the desk), softly rounded
+        hull() {
+            translate([0, jaw_arm_y, -eps]) rbox([w, clamp_arm_t, 2], 3);
+            translate([0, jaw_arm_y, -clamp_reach + clamp_arm_t])
+                rbox([w, clamp_arm_t, 2], 3);
+        }
     }
 }
 
@@ -226,10 +254,10 @@ module _hub() {
             // hub barrel (axis = X)
             translate([0, hub_y, 0]) rotate([0, 90, 0])
                 cylinder(h=hub_w, d=hub_od, center=true);
-            // two roll-stop flanges at the blade edges (spool ends)
+            // two lens-rim roll-stop flanges at the blade edges (spool ends)
             for (sx = [-1, 1])
                 translate([sx*hub_w/2, hub_y, 0]) rotate([0, 90, 0])
-                    cylinder(h=flange_t, d=flange_dia, center=true);
+                    rdisc(flange_dia, flange_t, min(flange_t/2 - 0.2, 1.6));
             // large-radius blend from the barrel up into the blade
             hull() {
                 translate([0, hub_y, -rib_depth/2 + eps])
@@ -339,23 +367,21 @@ module Axle() {
 //  LOCK  =  bayonet end fixator / outer roll stop  (print x2)
 // =============================================================================
 module Lock() {
-    total = lock_flange_t + lock_grip_h;
+    total  = lock_flange_t + lock_grip_h;
+    socket = bay_entry + lug_w + 1;          // shallow: keeps a solid dome wall
     difference() {
         union() {
-            cylinder(h=lock_flange_t, d=lock_flange_dia);          // roll stop
-            translate([0, 0, lock_flange_t])                       // grip
-                cylinder(h=lock_grip_h, d=lock_grip_dia);
-            // soft grip flutes
-            for (a=[0:24:359]) rotate([0,0,a])
-                translate([lock_grip_dia/2, 0, lock_flange_t + lock_grip_h/2])
-                    cylinder(h=lock_grip_h, d=1.6, center=true, $fn=8);
+            // lens-rim roll-stop flange (inward face, z = 0..flange_t)
+            translate([0, 0, lock_flange_t/2])
+                rdisc(lock_flange_dia, lock_flange_t, min(flange_t/2 - 0.2, 1.6));
+            // smooth domed grip (outward); overlap the flange so they fuse
+            translate([0, 0, lock_flange_t - 1.5]) _dome(lock_grip_dia, lock_grip_h);
         }
-        // socket + bayonet from the top (axle tip enters here)
-        translate([0, 0, total - (bay_entry + lug_w + 4)])
-            cylinder(h=bay_entry + lug_w + 5, d=bore_d);
-        _bayonet_slots(total);
-        // chamfer the mouth
-        translate([0,0,total-1.2]) cylinder(h=1.3, d1=bore_d, d2=bore_d+2.4);
+        // bayonet socket, opening on the inward face (z = 0)
+        translate([0, 0, -eps]) cylinder(h=socket + eps, d=bore_d);
+        translate([0, 0, socket]) mirror([0, 0, 1]) _bayonet_slots(socket);
+        // chamfer the mouth for easy engagement
+        translate([0, 0, -eps]) cylinder(h=1.4, d1=bore_d + 2.4, d2=bore_d);
     }
 }
 
@@ -384,9 +410,9 @@ module Assembly() {
     _roll_ghost_x( gap + rw/2,           rw);
     _roll_ghost_x( gap + rw + 4 + rw/2,  rw);
 
-    // two end fixators, openings facing inward toward the axle
-    color([0.75, 0.77, 0.82]) translate([ axle_total/2, hub_y, 0]) rotate([0,-90,0]) Lock();
-    color([0.75, 0.77, 0.82]) translate([-axle_total/2, hub_y, 0]) rotate([0, 90, 0]) Lock();
+    // two end fixators: domes face outward, openings toward the axle
+    color([0.75, 0.77, 0.82]) translate([ axle_total/2, hub_y, 0]) rotate([0, 90, 0]) Lock();
+    color([0.75, 0.77, 0.82]) translate([-axle_total/2, hub_y, 0]) rotate([0,-90,0]) Lock();
 }
 
 // -----------------------------------------------------------------------------
