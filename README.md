@@ -19,6 +19,12 @@ the central stand. Bayonet end-locks. Fully parametric (all dimensions at the
 top), independent modules `Parameters() / Stand() / Clamp() / Axle() / Lock() /
 Assembly()`.
 
+Styled after the reference sheet: an organic **"wishbone" stand** with a wide
+rounded hook-head and a large **leaf-shaped oval** cutout (`_sil2D`/`_oval2D`),
+lens-rimmed flanges, smooth domed fixators, and a hidden rear channel rib behind
+a flat 2.2 mm front. Previews render in **white matte** (`render_scad.py`,
+`turntable_scad.py`).
+
 ![OpenSCAD assembly](output/scad/preview_assembly.png)
 
 ### Engineering notes (weak points → fixes)

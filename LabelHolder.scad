@@ -39,8 +39,8 @@ rib_depth       = 14;     // how far the rib stands off the back
 rib_w           = 2.6;    // rib wall thickness
 
 // ---- long oval lightening cutout --------------------------------
-oval_len        = 150;    // long, slim slot (elegant)
-oval_w          = 8;
+oval_len        = 112;    // large leaf-shaped lightening cutout
+oval_w          = 24;
 
 // ---- axle + CENTRAL hub  (mount is at the CENTRE of the axle) -----
 // The stand carries the axle at its mid-point; rolls sit on BOTH sides.
@@ -95,10 +95,12 @@ eps             = 0.05;
 each_side   = axle_work/2;                                  // roll span per side
 axle_total  = hub_w + 2*flange_t + axle_work + 2*axle_end;  // full axle length
 bore_d      = axle_dia + bore_clr;
-top_y       = stand_h - stand_w/2;
-mid_y       = (hub_y + stand_h)/2;
 bot_y       = hub_y;
+strut_span  = stand_h - bot_y;
+mid_y       = bot_y + 0.5*strut_span;                       // oval / body centre
+top_y       = stand_h - stand_w/2;
 jaw_top     = stand_h - clamp_arm_t - clamp_open;
+clamp_head_w = 56;        // wide rounded head at the clamp (front view)
 
 // -----------------------------------------------------------------------------
 //  Parameters()  —  engineering summary (echoed to the console)
@@ -147,26 +149,27 @@ module _dome(d, h) {
         }
 }
 
-// 2D blade silhouette: two hulled lobes with a gentle waist (organic bone).
+// 2D blade silhouette: a graceful organic "wishbone" — narrow foot, gentle
+// body swell around the oval, wide rounded head at the clamp. Built by hulling
+// a chain of control circles for smooth, large-radius transitions.
 module _sil2D() {
-    union() {
+    k = [
+        [bot_y,                        hub_od + 2],   // foot (blends into hub)
+        [bot_y + 0.22*strut_span,      30],
+        [bot_y + 0.52*strut_span,      46],           // body swell (flanks oval)
+        [bot_y + 0.80*strut_span,      40],
+        [stand_h - clamp_head_w/2,     clamp_head_w], // rounded head, top=stand_h
+    ];
+    for (i = [0 : len(k) - 2])
         hull() {
-            translate([0, top_y]) circle(d=stand_w);
-            translate([0, mid_y]) circle(d=waist_w);
+            translate([0, k[i][0]])     circle(d = k[i][1]);
+            translate([0, k[i+1][0]])   circle(d = k[i+1][1]);
         }
-        hull() {
-            translate([0, mid_y]) circle(d=waist_w);
-            translate([0, bot_y]) circle(d=hub_od+4);
-        }
-    }
 }
 
-// 2D long oval cutout.
+// Large leaf-shaped (elliptical) lightening cutout, centred on the body.
 module _oval2D() {
-    hull() {
-        translate([0, mid_y - oval_len/2 + oval_w/2]) circle(d=oval_w);
-        translate([0, mid_y + oval_len/2 - oval_w/2]) circle(d=oval_w);
-    }
+    translate([0, mid_y]) resize([oval_w, oval_len]) circle(d = oval_len, $fn = 120);
 }
 
 // -----------------------------------------------------------------------------
