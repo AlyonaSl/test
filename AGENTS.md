@@ -27,4 +27,15 @@ is `src/label_roll_holder.py`; `build.py` exports/validates the files and
   moderate (see `STL_TOL`/`STL_ANG` in `build.py`), and the profile facet count
   low (`Spec.screw_facets`). CadQuery's named `"XZ"` plane extrudes toward -Y;
   round "axial" parts are therefore modelled along +Z and rotated into place.
+- `LabelHolder.scad` is the OpenSCAD implementation. Building/exporting it needs
+  the system packages `openscad` and `xvfb` (headless), which are NOT in the pip
+  update script — install once with `sudo apt-get install -y openscad xvfb` if
+  you need to regenerate SCAD outputs. The committed `output/scad/*.stl|3mf|step`
+  already exist, so this is only needed when changing the model. Rebuild all
+  formats with `./export.sh` (uses `xvfb-run openscad ... -D 'PART="..."'` then
+  `step_export.py`). `render_scad.py` / `turntable_scad.py` make previews.
+- OpenSCAD STEP is tessellated (OpenCASCADE/OCP wraps the mesh); to keep sizes
+  sane `export.sh` feeds coarse meshes to `step_export.py` and the screw STEP
+  uses a smooth shaft (`THREADED=false`). For analytic-BREP STEP use the
+  CadQuery variant (`build.py`).
 - There is no long-running service to start; this repo is a file generator.

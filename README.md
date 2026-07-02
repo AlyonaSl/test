@@ -1,8 +1,68 @@
-# Label roll holder — elegant centre-mount (3D-printable)
+# Label roll holder — 3D-printable, parametric
 
-A slim, elegant desk-edge holder for **3 label rolls**, reproduced as a fully
-parametric CAD model from the reference product sheet. Re-running the build
-regenerates every printable file (`STL`) and editable CAD file (`STEP`).
+A slim, industrial-looking desk-edge holder for **3 label rolls**.
+
+Two parametric implementations are provided for the same product:
+
+1. **`LabelHolder.scad`** — OpenSCAD model (primary), exports `STL` + `3MF` +
+   `STEP`. See **[OpenSCAD model](#openscad-model-labelholderscad)** below.
+2. **`src/label_roll_holder.py`** — CadQuery/Python variant (analytic BREP
+   `STEP`), documented in the rest of this file.
+
+---
+
+## OpenSCAD model (`LabelHolder.scad`)
+
+Single central desk-edge clamp, one long Ø16 mm axle, 3 rolls, bayonet
+end-lock. Fully parametric (all dimensions at the top of the file), independent
+modules `Parameters() / Stand() / Clamp() / Axle() / Lock() / Assembly()`.
+
+![OpenSCAD assembly](output/scad/preview_assembly.png)
+
+### Engineering notes (weak points → fixes)
+- **Axle cantilever** dominates deflection: Ø16, 290 mm, 1.5 kg UDL →
+  δ=wL⁴/(8EI)≈6.6 mm (PETG) / ≈3.9 mm (PLA). Ø16 & 290 mm are fixed by spec, so
+  the joint is a **deep 30 mm hub** (adds no rotation), plus an integral inner
+  roll-stop flange; `axle_dia` is a parameter (Ø20 ⇒ −59 % deflection) and PLA /
+  100 % infill is recommended for heavy rolls. `Parameters()` echoes the value.
+- **Stand bending** (2.2 mm blade is far too soft) → **hidden rear perimeter rib
+  (channel section)** adds depth in the load direction; the front stays flat and
+  2.2 mm.
+- **Clamp spine** locally thickened to full rib depth and blended with large
+  radii (no L-bracket).
+- Printable without supports (overhangs ≥45°/bridged); recessed screw; bayonet
+  for one-hand tool-free removal.
+
+### Parts
+| Part | Print qty | Module |
+|---|---|---|
+| Stand (blade + hidden rib + clamp head + hub) | 1 | `Stand()` |
+| Clamp thumb-screw (recessed, self-tapping) | 1 | `Clamp()` |
+| Axle Ø16 (inner flange + bayonet ends) | 1 | `Axle()` |
+| Bayonet end fixator / roll stop | 2 | `Lock()` |
+
+Files: `output/scad/<part>.stl` (print), `.3mf` (print), `.step` (reference).
+
+### Build / export (OpenSCAD)
+Requires system `openscad` + `xvfb` (headless). Preview one part or export all:
+```bash
+openscad -D 'PART="stand"' -o stand.stl LabelHolder.scad   # single part
+./export.sh                                                # all parts -> STL+3MF+STEP
+python3 render_scad.py       # preview PNGs
+python3 turntable_scad.py    # demo_turntable.mp4
+```
+`PART` ∈ `assembly | stand | clamp | axle | lock`.
+
+STEP note: OpenSCAD is a mesh modeller, so the `.step` files are **tessellated**
+(via OpenCASCADE), not analytic BREP; the screw STEP uses a smooth shaft while
+its STL/3MF keep the full printable thread. For an analytic-surface STEP use the
+CadQuery variant below.
+
+---
+
+## CadQuery variant (`src/label_roll_holder.py`)
+
+Same product, authored in Python/CadQuery; produces analytic-BREP `STEP`.
 
 ![Holder with 3 rolls](output/demo_rolls.png)
 

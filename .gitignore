@@ -1,3 +1,5 @@
 .venv/
 __pycache__/
 *.pyc
+# intermediate coarse meshes used only to build compact STEP files
+output/scad/*_coarse.stl
