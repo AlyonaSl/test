@@ -21,21 +21,35 @@ import cadquery as cq
 import trimesh
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-from label_roll_holder import DEFAULT, assembly, bracket, end_cap, separator  # noqa: E402
+from label_roll_holder import (  # noqa: E402
+    DEFAULT,
+    assembly,
+    axle,
+    bracket,
+    clamp_screw,
+    fixator,
+)
 
 OUT = os.path.join(os.path.dirname(__file__), "output")
 
 PARTS = {
     "bracket": bracket,
-    "separator": separator,
-    "end_cap": end_cap,
+    "axle": axle,
+    "clamp_screw": clamp_screw,
+    "fixator": fixator,
 }
+
+
+# Mesh tolerances kept moderate: fine enough for smooth prints, coarse enough
+# to keep twist-extruded thread STLs at a sane triangle count / file size.
+STL_TOL = 0.1
+STL_ANG = 0.35
 
 
 def export_part(name: str, solid: cq.Workplane) -> str:
     stl_path = os.path.join(OUT, f"{name}.stl")
     step_path = os.path.join(OUT, f"{name}.step")
-    cq.exporters.export(solid, stl_path, tolerance=0.05, angularTolerance=0.1)
+    cq.exporters.export(solid, stl_path, tolerance=STL_TOL, angularTolerance=STL_ANG)
     cq.exporters.export(solid, step_path)
     return stl_path
 
@@ -61,9 +75,10 @@ def main() -> int:
     os.makedirs(OUT, exist_ok=True)
     p = DEFAULT
     print(
-        f"Design: {p.num_rolls} rolls, width<= {p.roll_width:.0f} mm, "
-        f"core ID {p.core_id_min:.0f}-{p.core_id_max:.0f} mm, "
-        f"spindle Ø{p.spindle_dia:.0f} mm, reach {p.spindle_len + p.tip_len:.0f} mm\n"
+        f"Design: {p.num_rolls} rolls, core ID {p.core_id_min:.0f}-"
+        f"{p.core_id_max:.0f} mm, axle Ø{p.axle_dia:.0f}x{p.axle_len:.0f} mm, "
+        f"strut H{p.strut_h:.0f} mm, clamp desktops "
+        f"up to {p.desk_gap - 5:.0f} mm\n"
     )
 
     ok = True
@@ -75,7 +90,7 @@ def main() -> int:
     compound = assembly(p).toCompound()
     cq.exporters.export(compound, os.path.join(OUT, "assembly.step"))
     cq.exporters.export(compound, os.path.join(OUT, "assembly.stl"),
-                        tolerance=0.05, angularTolerance=0.1)
+                        tolerance=STL_TOL, angularTolerance=STL_ANG)
     print("\nWrote STL + STEP for every part and an assembly.step / assembly.stl")
 
     if not ok:

@@ -1,218 +1,351 @@
-"""Parametric 3D-printable label-roll holder.
+"""Parametric 3D-printable label-roll holder — "elegant centre-mount" design.
 
-Desk-side-mounted holder for 3 label rolls.
+Reproduces the reference product sheet:
+  * Elegant clamp-on-edge bracket (hooks over the desktop, tightened from
+    below with a printed knurled screw), with an oval lightening cutout and a
+    stiffening rim.
+  * Removable Ø16 mm axle ("ось") that twist-locks into the bracket hub
+    (bayonet) and carries up to 3 rolls (cores Ø50-80 mm).
+  * Printed knurled clamp screw (tool-free), for desktops 10-40 mm thick.
+  * Bayonet end fixator ("фиксатор оси", printed x2) that twist-locks onto the
+    axle end and retains the rolls.
 
-Design goals (from the spec):
-  * Holds up to 3 rolls, each up to 50 mm wide.
-  * Fits roll cores (inner sleeve / "втулка") of 50-80 mm inner diameter.
-  * Mounts to the vertical side wall of a desk (flat plate + countersunk screws).
-  * Compact and clean-looking.
+Everything is parametric — edit :class:`Spec` and re-run ``build.py``.
 
-The whole model is parametric: tweak the values in ``Params`` and re-run
-``build.py`` to regenerate every STL / STEP file.
+Modelling convention
+--------------------
+X = width, Y = depth (+Y points away from the wall, into the room),
+Z = height. The desktop top surface is at Z = 0; the strut hangs down toward
+negative Z, and the axle hub sits near the bottom pointing +Y.
 
-Coordinate convention used while modelling
-------------------------------------------
-The spindle is modelled pointing along +Z (easy to revolve / extrude).
-The back plate lies in the XY plane just below z = 0.
-For a wall installation, rotate the assembly -90 deg about X so the plate
-becomes vertical (against the wall) and the spindle points horizontally.
-Slicers re-orient parts anyway, so exported part files keep this simple
-modelling orientation; recommended print orientation is documented in the
-project README / AGENTS.md.
+Round "axial" parts (axle, hub socket, fixator) are modelled along +Z where
+CadQuery is best behaved, then rotated into place for the assembly.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import cos, pi, sin
 
 import cadquery as cq
 
 
+# ---------------------------------------------------------------------------
 @dataclass(frozen=True)
-class Params:
-    # ---- rolls -------------------------------------------------------------
+class Spec:
+    # ---- rolls / axle ------------------------------------------------------
     num_rolls: int = 3
-    roll_width: float = 50.0          # max width of one roll (mm)
-    roll_width_clearance: float = 4.0  # axial slack per roll (mm)
-    core_id_min: float = 50.0         # smallest core inner diameter (mm)
-    core_id_max: float = 80.0         # largest core inner diameter (mm)
+    core_id_min: float = 50.0
+    core_id_max: float = 80.0
+    axle_dia: float = 16.0
+    axle_len: float = 286.0
+    axle_working: float = 276.0
 
-    # ---- spindle -----------------------------------------------------------
-    spindle_dia: float = 30.0         # must be < core_id_min so rolls spin freely
-    end_margin: float = 8.0           # spare spindle length past the last roll
-    base_fillet: float = 8.0          # fillet at the spindle root (strength)
+    # ---- strut / decorative panel -----------------------------------------
+    strut_h: float = 220.0
+    strut_top_w: float = 56.0
+    strut_bottom_w: float = 26.0
+    wall_t: float = 2.2
+    rim_h: float = 6.0
+    rim_w: float = 5.0
+    oval_w: float = 12.0
+    oval_h: float = 70.0
 
-    # ---- reinforcement boss at the spindle root ----------------------------
-    boss_dia: float = 44.0            # < core_id_min so a core still slides over it
-    boss_len: float = 30.0
+    # ---- edge clamp --------------------------------------------------------
+    hook_depth: float = 18.0
+    clamp_w: float = 44.0
+    top_plate_t: float = 6.0
+    desk_gap: float = 45.0
+    jaw_t: float = 8.0
+    jaw_depth: float = 24.0
 
-    # ---- tip boss (receives the end cap) -----------------------------------
-    tip_dia: float = 16.0
-    tip_len: float = 12.0
+    # ---- axle hub (bayonet socket) ----------------------------------------
+    hub_od: float = 34.0
+    hub_len: float = 30.0
+    hub_z: float = 22.0
+    fit_clr: float = 0.4
 
-    # ---- back plate (screws to the desk side wall) -------------------------
-    plate_w: float = 90.0
-    plate_h: float = 90.0
-    plate_t: float = 8.0
-    screw_pitch: float = 58.0         # vertical spacing between the 2 screws
-    screw_hole_dia: float = 4.6       # clearance for a #8 / 4.5 mm wood screw
-    screw_head_dia: float = 9.0       # countersink major diameter
-    csk_angle: float = 90.0
+    # ---- bayonet -----------------------------------------------------------
+    lug_w: float = 5.0
+    lug_h: float = 2.5
+    lug_pos: float = 8.0
+    bay_entry: float = 11.0
 
-    # ---- separator discs (printed x (num_rolls - 1)) -----------------------
-    # Must be larger than core_id_max so even an 80 mm core cannot ride over it.
-    sep_dia: float = 86.0
-    sep_thickness: float = 6.0
-    fit_clearance: float = 1.0        # radial slack so parts slide on the spindle
+    # ---- clamp screw -------------------------------------------------------
+    screw_root_r: float = 5.0
+    screw_crest: float = 1.6
+    screw_pitch: float = 4.0
+    screw_len: float = 52.0
+    screw_facets: int = 44
+    knob_dia: float = 30.0
+    knob_h: float = 12.0
+    knob_facets: int = 24
 
-    # ---- end cap (spool-end style: large flange + central hub/socket) ------
-    cap_flange_dia: float = 88.0      # > core_id_max: stops the outer roll
-    cap_flange_t: float = 4.0
-    cap_hub_dia: float = 28.0
-    cap_hub_len: float = 12.0
-    cap_wall: float = 3.0
+    # ---- fixator (end cap) -------------------------------------------------
+    fix_flange_dia: float = 84.0
+    fix_flange_t: float = 3.0
+    fix_hub_dia: float = 30.0
+    fix_hub_len: float = 14.0
+    fix_facets: int = 22
 
     @property
-    def bay(self) -> float:
-        return self.roll_width + self.roll_width_clearance
-
-    @property
-    def usable_len(self) -> float:
-        """Spindle length occupied by rolls + separators."""
-        return self.num_rolls * self.bay + (self.num_rolls - 1) * self.sep_thickness
-
-    @property
-    def spindle_len(self) -> float:
-        """Straight spindle body length, from plate face to tip boss."""
-        return self.usable_len + self.end_margin
+    def bore_r(self) -> float:
+        return self.axle_dia / 2 + self.fit_clr
 
 
-DEFAULT = Params()
+DEFAULT = Spec()
+
+
+# ---------------------------------------------------------------------------
+# Thread helpers (robust single-op twistExtrude — meshes cleanly)
+# ---------------------------------------------------------------------------
+def _thread_profile(r_minor: float, crest: float, crest_ang_deg: float, n: int):
+    from math import radians
+
+    half = radians(crest_ang_deg) / 2.0
+    pts = []
+    for i in range(n):
+        a = 2 * pi * i / n
+        d = ((a + pi) % (2 * pi)) - pi
+        bump = crest * (1 - abs(d) / half) if abs(d) < half else 0.0
+        r = r_minor + bump
+        pts.append((r * cos(a), r * sin(a)))
+    return pts
+
+
+def _threaded_solid(r_minor, crest, pitch, height, crest_ang=150.0, n=44):
+    prof = _thread_profile(r_minor, crest, crest_ang, n)
+    twist = 360.0 * height / pitch
+    return cq.Workplane("XY").polyline(prof).close().twistExtrude(height, twist)
+
+
+# ---------------------------------------------------------------------------
+# Bayonet socket / lugs (all modelled along +Z, opening at the top face)
+# ---------------------------------------------------------------------------
+def _cut_bayonet_socket(part: cq.Workplane, s: Spec, face_z: float, depth: float):
+    """Cut a Ø(bore) blind socket with two J-slots, opening at Z = face_z."""
+    bore = s.bore_r
+    slot_r = bore + s.lug_h + 0.4
+    w = s.lug_w + 0.6
+    part = part.cut(
+        cq.Workplane("XY", origin=(0, 0, face_z)).circle(bore).extrude(-depth)
+    )
+    for ang in (0.0, 180.0):
+        entry = (
+            cq.Workplane("XY", origin=(0, 0, face_z))
+            .transformed(rotate=(0, 0, ang))
+            .center(bore - 0.2, 0)
+            .rect(s.lug_h + 0.6, w, centered=(False, True))
+            .extrude(-s.bay_entry)
+        )
+        part = part.cut(entry)
+        try:
+            groove = (
+                cq.Workplane("XZ", origin=(0, 0, face_z - s.bay_entry + w / 2))
+                .center(bore - 0.2, 0)
+                .rect(s.lug_h + 0.6, w, centered=(False, True))
+                .revolve(90.0, (0, 0, 0), (0, 0, 1))
+                .rotate((0, 0, 0), (0, 0, 1), ang)
+            )
+            part = part.cut(groove)
+        except Exception:
+            pass
+    return part
+
+
+def _add_lugs(part: cq.Workplane, s: Spec, z_end: float, direction: int):
+    """Add two radial bayonet lugs near an axle end (axle modelled along +Z)."""
+    r = s.axle_dia / 2
+    z_center = z_end + direction * s.lug_pos
+    for ang in (0.0, 180.0):
+        lug = (
+            cq.Workplane("XY", origin=(0, 0, z_center - s.lug_w / 2))
+            .transformed(rotate=(0, 0, ang))
+            .center(r - 0.6, 0)
+            .rect(s.lug_h + 0.6, s.lug_w, centered=(False, True))
+            .extrude(s.lug_w)
+        )
+        part = part.union(lug)
+    return part
 
 
 # ---------------------------------------------------------------------------
 # Parts
 # ---------------------------------------------------------------------------
-def bracket(p: Params = DEFAULT) -> cq.Workplane:
-    """Back plate + reinforcement boss + cantilever spindle (single print)."""
-    # Back plate, top face at z = 0, growing downward.
-    plate = (
-        cq.Workplane("XY")
-        .box(p.plate_w, p.plate_h, p.plate_t, centered=(True, True, False))
-        .translate((0, 0, -p.plate_t))
-    )
+def _strut_silhouette(s: Spec):
+    ht = s.strut_h
+    # Reinforced (wider, solid) foot around the hub, slender neck, wide top.
+    keys = [
+        (0.0, 20.0),
+        (0.18 * ht, 20.0),
+        (0.34 * ht, 13.0),
+        (0.52 * ht, 13.0),
+        (0.74 * ht, 19.0),
+        (0.92 * ht, 25.0),
+        (ht, s.strut_top_w / 2),
+    ]
+    right = [(hw, z) for (z, hw) in keys]
+    left = [(-hw, z) for (z, hw) in reversed(keys)]
+    return cq.Workplane("XZ").spline(right + left).close()
 
-    # Two countersunk screw holes, heads on the room-facing (+Z) side.
-    plate = (
-        plate.faces(">Z")
-        .workplane()
-        .pushPoints([(0, p.screw_pitch / 2), (0, -p.screw_pitch / 2)])
-        .cskHole(p.screw_hole_dia, p.screw_head_dia, p.csk_angle)
-    )
 
-    # Reinforcement boss around the spindle root.
-    boss = cq.Workplane("XY").circle(p.boss_dia / 2).extrude(p.boss_len)
+def strut(s: Spec = DEFAULT) -> cq.Workplane:
+    """Decorative shell panel with a stiffening rim and an oval cutout.
 
-    # Straight spindle body.
-    spindle = cq.Workplane("XY").circle(p.spindle_dia / 2).extrude(p.spindle_len)
+    Modelled in the XZ plane; note CadQuery extrudes "XZ" toward -Y, so the
+    panel occupies Y in [-total_t, 0] and its flat back is at Y = 0.
+    """
+    total_t = s.wall_t + s.rim_h
+    panel = _strut_silhouette(s).extrude(total_t)  # -> Y in [-total_t, 0]
 
-    # Tip boss that the end cap grips.
-    tip = (
-        cq.Workplane("XY")
-        .workplane(offset=p.spindle_len)
-        .circle(p.tip_dia / 2)
-        .extrude(p.tip_len)
-    )
-
-    part = plate.union(boss).union(spindle).union(tip)
-
-    # Fillet the boss root against the plate for strength (best-effort).
+    inner = _strut_silhouette(s).wires().toPending().offset2D(-s.rim_w)
     try:
-        root_edges = part.edges(
-            cq.selectors.BoxSelector((-100, -100, -0.5), (100, 100, 0.5))
+        pocket = inner.extrude(s.rim_h)  # -> Y in [-rim_h, 0]
+        # Keep the foot and the top solid; only lighten the mid region.
+        z0, z1 = 0.26 * s.strut_h, 0.90 * s.strut_h
+        limiter = cq.Workplane("XY").box(400, 400, z1 - z0).translate(
+            (0, 0, (z0 + z1) / 2)
         )
-        part = root_edges.fillet(p.base_fillet)
+        pocket = pocket.intersect(limiter)
+        panel = panel.cut(pocket)
     except Exception:
         pass
 
-    # Chamfer the very tip so the end cap slides on easily (best-effort).
+    oval = (
+        cq.Workplane("XZ", origin=(0, 0, s.strut_h * 0.52))
+        .ellipse(s.oval_w / 2, s.oval_h / 2)
+        .extrude(total_t + 2)
+    )
+    panel = panel.cut(oval)
+    # Flip so the shell grows in +Y (front = room), flat back at Y = 0.
+    return panel.mirror("XZ")
+
+
+def clamp(s: Spec = DEFAULT) -> cq.Workplane:
+    """Edge-clamp: top plate (hook) + lower jaw with a self-tap pilot hole."""
+    top = s.strut_h
+    cw = s.clamp_w
+    top_plate = (
+        cq.Workplane("XY")
+        .box(cw, s.hook_depth + s.wall_t, s.top_plate_t, centered=(True, False, False))
+        .translate((0, -s.hook_depth, top))
+    )
+    jaw_z = top - s.desk_gap
+    jaw = (
+        cq.Workplane("XY")
+        .box(cw, s.jaw_depth + s.wall_t, s.jaw_t, centered=(True, False, False))
+        .translate((0, -s.jaw_depth, jaw_z - s.jaw_t))
+    )
+    boss_r = s.screw_root_r + s.screw_crest + 4
+    boss = (
+        cq.Workplane("XY", origin=(0, -s.jaw_depth / 2, jaw_z - s.jaw_t))
+        .circle(boss_r)
+        .extrude(-14)
+    )
+    body = top_plate.union(jaw).union(boss)
+
+    pilot_r = s.screw_root_r + s.screw_crest * 0.35
+    hole = (
+        cq.Workplane("XY", origin=(0, -s.jaw_depth / 2, jaw_z - s.jaw_t - 14 - 1))
+        .circle(pilot_r)
+        .extrude(s.jaw_t + 16 + 3)
+    )
+    return body.cut(hole)
+
+
+def _hub_z(s: Spec) -> cq.Workplane:
+    """Hub cylinder with a bayonet socket, modelled along +Z (opening at top)."""
+    h = cq.Workplane("XY").circle(s.hub_od / 2).extrude(s.hub_len)
+    return _cut_bayonet_socket(h, s, face_z=s.hub_len, depth=s.bay_entry + s.lug_w + 6)
+
+
+def hub(s: Spec = DEFAULT) -> cq.Workplane:
+    """Hub oriented for the bracket: pointing +Y at height ``hub_z``."""
+    return (
+        _hub_z(s)
+        .rotate((0, 0, 0), (1, 0, 0), -90)  # +Z -> +Y
+        .translate((0, 1.0, s.hub_z))  # embed 1 mm into the solid foot
+    )
+
+
+def bracket(s: Spec = DEFAULT) -> cq.Workplane:
+    """Full bracket = strut + edge clamp + axle hub (single print)."""
+    return strut(s).union(clamp(s)).union(hub(s))
+
+
+def axle(s: Spec = DEFAULT) -> cq.Workplane:
+    """Ø16 axle (along +Z): inner shoulder (roll stop) + bayonet lugs each end."""
+    rod = cq.Workplane("XY").circle(s.axle_dia / 2).extrude(s.axle_len)
+    shoulder = (
+        cq.Workplane("XY", origin=(0, 0, 18))
+        .circle(s.fix_flange_dia / 2)
+        .extrude(s.fix_flange_t)
+    )
+    part = rod.union(shoulder)
+    part = _add_lugs(part, s, z_end=0.0, direction=+1)
+    part = _add_lugs(part, s, z_end=s.axle_len, direction=-1)
     try:
         part = part.faces(">Z").chamfer(1.2)
+        part = part.faces("<Z").chamfer(1.2)
     except Exception:
         pass
     return part
 
 
-def separator(p: Params = DEFAULT) -> cq.Workplane:
-    """Disc that slides on the spindle to keep neighbouring rolls apart."""
-    bore = p.spindle_dia + p.fit_clearance
-    disc = (
-        cq.Workplane("XY")
-        .circle(p.sep_dia / 2)
-        .circle(bore / 2)
-        .extrude(p.sep_thickness)
+def clamp_screw(s: Spec = DEFAULT) -> cq.Workplane:
+    """Printed knurled thumb-screw for the edge clamp."""
+    shaft = _threaded_solid(
+        s.screw_root_r, s.screw_crest, s.screw_pitch, s.screw_len, n=s.screw_facets
     )
-    # Light chamfer on the outer top/bottom edges for a clean look (best-effort).
+    knob = (
+        cq.Workplane("XY", origin=(0, 0, s.screw_len))
+        .polygon(s.knob_facets, s.knob_dia)
+        .extrude(s.knob_h)
+    )
+    pad = cq.Workplane("XY").circle(s.screw_root_r).extrude(-3)
+    part = shaft.union(knob).union(pad)
     try:
-        disc = disc.edges("%CIRCLE").chamfer(0.8)
+        part = part.faces(">Z").fillet(2.0)
     except Exception:
         pass
-    return disc
+    return part
 
 
-def end_cap(p: Params = DEFAULT) -> cq.Workplane:
-    """Spool-end push-on cap: a large flange (roll stop) + a central hub.
-
-    The hub has a socket that friction-fits over the spindle tip boss.
-    """
-    socket_dia = p.tip_dia + 0.4  # friction fit over the tip boss
-    flange = cq.Workplane("XY").circle(p.cap_flange_dia / 2).extrude(p.cap_flange_t)
-    hub = (
-        cq.Workplane("XY")
-        .workplane(offset=p.cap_flange_t)
-        .circle(p.cap_hub_dia / 2)
-        .extrude(p.cap_hub_len)
+def fixator(s: Spec = DEFAULT) -> cq.Workplane:
+    """Bayonet end cap (along +Z): flange (roll stop) + hub with bayonet socket."""
+    flange = (
+        cq.Workplane("XY").polygon(s.fix_facets, s.fix_flange_dia).extrude(s.fix_flange_t)
     )
-    cap = flange.union(hub)
-    total = p.cap_flange_t + p.cap_hub_len
-    # Socket bored up from the bottom (the face that goes onto the spindle).
-    cap = (
-        cap.faces("<Z")
-        .workplane()
-        .circle(socket_dia / 2)
-        .cutBlind(total - p.cap_wall)
+    hub_cap = (
+        cq.Workplane("XY", origin=(0, 0, s.fix_flange_t))
+        .circle(s.fix_hub_dia / 2)
+        .extrude(s.fix_hub_len)
     )
-    # Soften outer edges for a finished look (best-effort).
-    try:
-        cap = cap.faces(">Z").edges().fillet(2.5)
-        cap = cap.edges("%CIRCLE").edges(">Z").chamfer(0.8)
-    except Exception:
-        pass
-    return cap
+    cap = flange.union(hub_cap)
+    total = s.fix_flange_t + s.fix_hub_len
+    return _cut_bayonet_socket(cap, s, face_z=total, depth=s.bay_entry + s.lug_w + 3)
 
 
-def assembly(p: Params = DEFAULT) -> cq.Assembly:
-    """Positioned assembly for visualisation (bracket + separators + cap)."""
+# ---------------------------------------------------------------------------
+def assembly(s: Spec = DEFAULT) -> cq.Assembly:
     asm = cq.Assembly()
-    asm.add(bracket(p), name="bracket", color=cq.Color(0.30, 0.45, 0.75))
+    asm.add(bracket(s), name="bracket", color=cq.Color(0.90, 0.90, 0.92))
 
-    # Separators sit after each roll bay (except the last).
-    z = 0.0
-    for i in range(p.num_rolls - 1):
-        z += p.bay
-        asm.add(
-            separator(p),
-            name=f"separator_{i + 1}",
-            loc=cq.Location(cq.Vector(0, 0, z)),
-            color=cq.Color(0.85, 0.55, 0.20),
-        )
-        z += p.sep_thickness
-
+    ax_off = s.hub_len - 14
+    axle_p = axle(s).rotate((0, 0, 0), (1, 0, 0), -90)  # +Z -> +Y
     asm.add(
-        end_cap(p),
-        name="end_cap",
-        loc=cq.Location(cq.Vector(0, 0, p.spindle_len)),
-        color=cq.Color(0.75, 0.30, 0.30),
+        axle_p,
+        name="axle",
+        loc=cq.Location(cq.Vector(0, ax_off, s.hub_z)),
+        color=cq.Color(0.82, 0.82, 0.86),
+    )
+
+    tip_y = ax_off + s.axle_len
+    fix_p = fixator(s).rotate((0, 0, 0), (1, 0, 0), 90)  # opening faces -Y
+    asm.add(
+        fix_p,
+        name="fixator",
+        loc=cq.Location(cq.Vector(0, tip_y, s.hub_z)),
+        color=cq.Color(0.72, 0.74, 0.80),
     )
     return asm

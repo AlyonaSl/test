@@ -78,16 +78,20 @@ def render(stl_name: str, png_name: str, title: str, wall: bool = True,
 
 def main() -> None:
     render("assembly.stl", "preview_assembly.png",
-           "Label roll holder - wall-mounted assembly", wall=True,
-           azim=-60, color="#6f9ad6")
+           "Label roll holder - assembly", wall=False,
+           elev=18, azim=-62, color="#9aa7b6")
     render("bracket.stl", "preview_bracket.png",
-           "Bracket + spindle (single print)", wall=True,
-           azim=-60, color="#6f9ad6")
-    render("separator.stl", "preview_separator.png",
-           "Separator disc (print x2)", wall=False,
-           elev=32, azim=-50, color="#d68e46")
-    render("end_cap.stl", "preview_end_cap.png",
-           "End cap", wall=False, elev=28, azim=-50, color="#c25151")
+           "Bracket (clamp + strut + hub)", wall=False,
+           elev=18, azim=-62, color="#9aa7b6")
+    render("axle.stl", "preview_axle.png",
+           "Axle Ø16 (bayonet, print x1)", wall=False,
+           elev=24, azim=-55, color="#8f9aa8")
+    render("clamp_screw.stl", "preview_clamp_screw.png",
+           "Knurled clamp screw", wall=False,
+           elev=22, azim=-55, color="#b0873f")
+    render("fixator.stl", "preview_fixator.png",
+           "Bayonet fixator (print x2)", wall=False,
+           elev=28, azim=-55, color="#c25151")
 
 
 if __name__ == "__main__":
