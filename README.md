@@ -13,18 +13,24 @@ Two parametric implementations are provided for the same product:
 
 ## OpenSCAD model (`LabelHolder.scad`)
 
-Single central desk-edge clamp, one long Ø16 mm axle, 3 rolls, bayonet
-end-lock. Fully parametric (all dimensions at the top of the file), independent
-modules `Parameters() / Stand() / Clamp() / Axle() / Lock() / Assembly()`.
+Desk-edge clamp whose stand carries the axle at the **centre of its length**, so
+the Ø16 mm axle extends to both sides and the 3 rolls sit on **both sides** of
+the central stand. Bayonet end-locks. Fully parametric (all dimensions at the
+top), independent modules `Parameters() / Stand() / Clamp() / Axle() / Lock() /
+Assembly()`.
 
 ![OpenSCAD assembly](output/scad/preview_assembly.png)
 
 ### Engineering notes (weak points → fixes)
-- **Axle cantilever** dominates deflection: Ø16, 290 mm, 1.5 kg UDL →
-  δ=wL⁴/(8EI)≈6.6 mm (PETG) / ≈3.9 mm (PLA). Ø16 & 290 mm are fixed by spec, so
-  the joint is a **deep 30 mm hub** (adds no rotation), plus an integral inner
-  roll-stop flange; `axle_dia` is a parameter (Ø20 ⇒ −59 % deflection) and PLA /
-  100 % infill is recommended for heavy rolls. `Parameters()` echoes the value.
+- **Centre mount halves the cantilever:** supporting the axle at its mid-point
+  turns one 290 mm cantilever into two ~145 mm spans. Since δ∝L⁴, the per-side
+  deflection at 1.5 kg drops to ≈0.4 mm (PETG) / ≈0.25 mm (PLA) — well within
+  "no visible sag". `Parameters()` echoes the computed value.
+- **Central roll stops:** two Ø(core_max+4) flanges flank the hub so rolls
+  (cores Ø50–80) cannot slide into the stand; the axle passes through a central
+  through-bore and is retained by the two bayonet end fixators.
+- **Reinforced foot** at the base ties the hub into the blade (no trapped voids,
+  stiffest where the bending moment peaks). `axle_dia` stays parametric.
 - **Stand bending** (2.2 mm blade is far too soft) → **hidden rear perimeter rib
   (channel section)** adds depth in the load direction; the front stays flat and
   2.2 mm.
@@ -36,9 +42,9 @@ modules `Parameters() / Stand() / Clamp() / Axle() / Lock() / Assembly()`.
 ### Parts
 | Part | Print qty | Module |
 |---|---|---|
-| Stand (blade + hidden rib + clamp head + hub) | 1 | `Stand()` |
+| Stand (blade + hidden rib + clamp head + central hub + flanges) | 1 | `Stand()` |
 | Clamp thumb-screw (recessed, self-tapping) | 1 | `Clamp()` |
-| Axle Ø16 (inner flange + bayonet ends) | 1 | `Axle()` |
+| Axle Ø16 (plain rod, bayonet lug at each end) | 1 | `Axle()` |
 | Bayonet end fixator / roll stop | 2 | `Lock()` |
 
 Files: `output/scad/<part>.stl` (print), `.3mf` (print), `.step` (reference).

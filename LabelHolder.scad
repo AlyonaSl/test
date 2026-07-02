@@ -42,17 +42,18 @@ rib_w           = 2.6;    // rib wall thickness
 oval_len        = 120;
 oval_w          = 10;
 
-// ---- axle + hub --------------------------------------------------
+// ---- axle + CENTRAL hub  (mount is at the CENTRE of the axle) -----
+// The stand carries the axle at its mid-point; rolls sit on BOTH sides.
+// This turns one 290 mm cantilever into two ~145 mm ones (deflection ~1/16).
 axle_dia        = 16;     // spec: Ø16 (raise to reduce deflection)
-axle_work       = 290;    // clear roll span
-axle_end        = 12;     // spare axle past the tip lug
-bore_clr        = 0.6;    // radial fit clearance (socket vs axle)
-hub_od          = 30;     // axle hub outer diameter
-hub_len         = 34;     // hub length (deep engagement = rigid joint)
-hub_y           = 30;     // hub centre height above the bottom
-hub_engage      = 30;     // axle length seated inside the hub
-inner_flange_dia= 84;     // integral inner roll-stop (> core_id_max)
-inner_flange_t  = 3;
+axle_work       = 290;    // total clear roll span (both sides combined)
+axle_end        = 14;     // spare axle past each end lug
+bore_clr        = 0.6;    // radial fit clearance (bore vs axle)
+hub_od          = 30;     // central hub outer diameter
+hub_w           = 26;     // central hub length along the axle (X)
+hub_y           = 46;     // axle height above the stand bottom
+flange_dia      = core_id_max + 4;  // central roll-stop flanges (> max core)
+flange_t        = 3;      // flange thickness
 
 // ---- edge clamp --------------------------------------------------
 desk_min        = 10;
@@ -91,11 +92,12 @@ $fn             = FN;
 eps             = 0.05;
 
 // ---- derived -----------------------------------------------------
-axle_total  = hub_engage + inner_flange_t + axle_work + axle_end;
+each_side   = axle_work/2;                                  // roll span per side
+axle_total  = hub_w + 2*flange_t + axle_work + 2*axle_end;  // full axle length
 bore_d      = axle_dia + bore_clr;
 top_y       = stand_h - stand_w/2;
-mid_y       = stand_h/2;
-bot_y       = max(stand_w/2, hub_y);
+mid_y       = (hub_y + stand_h)/2;
+bot_y       = hub_y;
 jaw_top     = stand_h - clamp_arm_t - clamp_open;
 
 // -----------------------------------------------------------------------------
@@ -104,10 +106,12 @@ jaw_top     = stand_h - clamp_arm_t - clamp_open;
 module Parameters() {
     I    = PI*pow(axle_dia,4)/64;                 // 2nd moment of area
     w    = 15/axle_work;                          // 1.5 kg UDL (N/mm)
-    dPET = w*pow(axle_work,4)/(8*2100*I);         // PETG tip deflection
-    dPLA = w*pow(axle_work,4)/(8*3600*I);         // PLA  tip deflection
+    // centre mount -> each side is a ~each_side cantilever (balanced load)
+    dPET = w*pow(each_side,4)/(8*2100*I);         // PETG per-side deflection
+    dPLA = w*pow(each_side,4)/(8*3600*I);         // PLA  per-side deflection
     echo(str("[LabelHolder] axle I = ", round(I), " mm^4"));
-    echo(str("[LabelHolder] tip deflection @1.5kg : PETG ~", round(dPET*10)/10,
+    echo(str("[LabelHolder] centre-mount: 2 x ", each_side, " mm spans"));
+    echo(str("[LabelHolder] per-side deflection @1.5kg : PETG ~", round(dPET*10)/10,
              " mm, PLA ~", round(dPLA*10)/10, " mm"));
     echo(str("[LabelHolder] axle total length = ", axle_total, " mm"));
 }
@@ -213,16 +217,42 @@ module _clamp_head() {
     }
 }
 
-// Axle hub (boss + bayonet socket), pointing +Z (front).
+// CENTRAL hub: through-bore along X + two roll-stop flanges at the blade edges.
+// The axle passes through and rolls sit on both sides against the flanges.
 module _hub() {
+    span = hub_w + 2*flange_t + 4;
     difference() {
-        translate([0, hub_y, 0]) cylinder(h=hub_len, d=hub_od);
-        // blind bore (deep engagement)
-        translate([0, hub_y, hub_len - hub_engage - eps])
-            cylinder(h=hub_engage + eps*2, d=bore_d);
-        // bayonet slots at the front opening
-        translate([0, hub_y, 0]) _bayonet_slots(hub_len);
+        union() {
+            // hub barrel (axis = X)
+            translate([0, hub_y, 0]) rotate([0, 90, 0])
+                cylinder(h=hub_w, d=hub_od, center=true);
+            // two roll-stop flanges at the blade edges (spool ends)
+            for (sx = [-1, 1])
+                translate([sx*hub_w/2, hub_y, 0]) rotate([0, 90, 0])
+                    cylinder(h=flange_t, d=flange_dia, center=true);
+            // large-radius blend from the barrel up into the blade
+            hull() {
+                translate([0, hub_y, -rib_depth/2 + eps])
+                    rbox([stand_w, hub_od, rib_depth], 4);
+                translate([0, hub_y + 30, -rib_depth/2 + eps])
+                    rbox([waist_w + 4, 10, rib_depth], 4);
+            }
+        }
+        // axle through-bore
+        translate([0, hub_y, 0]) rotate([0, 90, 0])
+            cylinder(h=span, d=bore_d, center=true);
     }
+}
+
+// Solid reinforced foot: fills the base so the hub joins the blade with no
+// trapped voids (and stiffens the most-loaded region).
+module _foot() {
+    foot_top = hub_y + 30;
+    translate([0, 0, -rib_depth]) linear_extrude(rib_depth)
+        intersection() {
+            _sil2D();
+            translate([-200, -500]) square([400, 500 + foot_top]);
+        }
 }
 
 module Stand() {
@@ -231,11 +261,12 @@ module Stand() {
             _blade_face();
             _blade_rib();
             _clamp_head();
+            _foot();
             _hub();
         }
-        // long oval lightening cutout (through everything)
+        // long oval lightening cutout (through the blade)
         translate([0, 0, -rib_depth - 1])
-            linear_extrude(rib_depth + hub_len + 2) _oval2D();
+            linear_extrude(rib_depth + 2) _oval2D();
         // recessed clamp-screw pilot hole (self-tapping), axis = Y, in the jaw
         translate([0, jaw_top + 1, screw_z]) rotate([90, 0, 0])
             cylinder(h=clamp_arm_t + 2, d=screw_dia - 2*screw_crest);
@@ -285,16 +316,16 @@ module Clamp() {
 }
 
 // =============================================================================
-//  AXLE  (Ø16, inner roll-stop flange, bayonet lugs at both ends)
+//  AXLE  (Ø16 plain rod, bayonet lugs at BOTH ends for the two end fixators)
+//  Passes through the central hub; rolls load on both sides.
 // =============================================================================
 module Axle() {
+    lug_z = bay_entry - lug_w/2 + 2;      // lug position matching the fixator
     difference() {
         union() {
-            cylinder(h=axle_total, d=axle_dia);                     // rod
-            translate([0, 0, hub_engage])                           // inner stop
-                cylinder(h=inner_flange_t, d=inner_flange_dia);
-            _axle_lugs(hub_engage/2 - 2);                           // root lugs
-            _axle_lugs(axle_total - axle_end/2 - 2);                // tip lugs
+            cylinder(h=axle_total, d=axle_dia);          // rod
+            _axle_lugs(lug_z);                           // one end
+            _axle_lugs(axle_total - lug_z);              // other end
         }
         // 45deg lead-in chamfers at both ends (print + easy insertion)
         translate([0,0,-eps])
@@ -331,27 +362,31 @@ module Lock() {
 // =============================================================================
 //  ASSEMBLY  (for preview only; parts still print separately)
 // =============================================================================
-module _roll_ghost(z, len) {
-    color([0.85,0.8,0.6,0.25])
-        translate([0, hub_y, z]) cylinder(h=len, d=roll_od_max);
+// Roll ghost (cylinder along X) at centre xc, width w.
+module _roll_ghost_x(xc, w) {
+    color([0.85, 0.8, 0.6, 0.25])
+        translate([xc, hub_y, 0]) rotate([0, 90, 0])
+            translate([0, 0, -w/2]) cylinder(h=w, d=roll_od_max);
 }
 
 module Assembly() {
     Stand();
 
-    // axle seated in the hub, pointing +Z
-    z0 = hub_len - hub_engage;
-    color([0.8,0.82,0.85]) translate([0, hub_y, z0]) Axle();
+    // axle through the central hub, centred on the stand (axis = X)
+    color([0.8, 0.82, 0.85])
+        translate([-axle_total/2, hub_y, 0]) rotate([0, 90, 0]) Axle();
 
-    // three roll ghosts along the working span
-    span0 = z0 + hub_engage + inner_flange_t + 3;
-    seg   = (axle_work - 6) / roll_count;
-    for (i = [0:roll_count-1]) _roll_ghost(span0 + i*seg, seg - 6);
+    // roll ghosts filling BOTH sides of the centre flanges evenly
+    // (example split of 3 rolls: one wide roll left, two rolls right)
+    gap = hub_w/2 + flange_t + 2;
+    _roll_ghost_x(-(gap + each_side/2), each_side - 8);   // left side (1 roll)
+    rw = (each_side - 12)/2;                              // right side (2 rolls)
+    _roll_ghost_x( gap + rw/2,           rw);
+    _roll_ghost_x( gap + rw + 4 + rw/2,  rw);
 
-    // tip fixator (opening faces -Z toward the axle)
-    z_tip = z0 + axle_total;
-    color([0.75,0.77,0.82])
-        translate([0, hub_y, z_tip]) rotate([180,0,0]) Lock();
+    // two end fixators, openings facing inward toward the axle
+    color([0.75, 0.77, 0.82]) translate([ axle_total/2, hub_y, 0]) rotate([0,-90,0]) Lock();
+    color([0.75, 0.77, 0.82]) translate([-axle_total/2, hub_y, 0]) rotate([0, 90, 0]) Lock();
 }
 
 // -----------------------------------------------------------------------------
